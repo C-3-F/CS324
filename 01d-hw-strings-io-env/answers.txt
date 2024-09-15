@@ -1,0 +1,69 @@
+1. "hello" is a string with 5 characters but the char array has 6 because of the null char.
+2. 0
+3. #
+4. 7A
+5. 10
+6. the length is 8 compared to 6. it is 8 because that fills the whole 64 bit address.
+7. Also 8.
+8. 1024B
+9. 0B
+
+
+### Section 2
+
+10. s1 and s3 are the same because they are equal pointers
+11. s1 and s2 are both the referred to address because they are char[].
+12. s1 and s3 both point to the same address because s3 was set to equal s1.
+13. They are all equal
+14. s1 == s3 because they are the same pointer
+15. They are all  equal
+16. s1 and s3 now both say 'hullo'
+17. s1 == s3
+18. s1 == s3
+
+
+### Part 3
+19. They are all equal. They are all stored the same in binary
+
+
+### Part 4
+20. memcmp doesn't show that they are the same because the memory values of the whole array are different.
+21. strcmp does show that they are the same because strcmp is terminated by the first null char where they are the same.
+22.
+23. it copied only the first string up until the null char.
+24. it encoded the whole string sequence with sprintf, then added a null char at the end after the string '42'
+25. you could use s5 and s7. s5 is an arbitrary pointer that could point to anything. s6 is specifically NULL which will result in a seg fault. And then s7 points to the same value as s4 which gives us the value of the string.
+
+### Part 5
+26: 
+	stdin: 0
+	stderr: 2
+	stdout: 1
+
+28. They were both the same.
+29. It crashes the program and only those two lines are printed.
+30. It continues normally
+
+31. it is the file descriptor of the open file.
+32. they were the same. The return value is num bytes read
+33. no... the file doesn't have a null char in it. I guess it doesn't get converted into a 'string'
+
+34. it seemed to continue where it left off because it still only read 4 bytes in but it was the last 4 bytes giving a total of 8.
+
+35. only it's value. it's just an integer
+36. 8
+37. no, it hit the end of the file and the buffer was partly full
+38. 22
+39. 22
+40. it would read the rest of the bytes until it filled up the bufer 
+41. no new values are read into the buffer
+42. there is extra space in the buffer that is printed out.
+43. adding the null char terminates the string and so printf stops printing the rest of the buffer.
+44. it indicates the status of the close. 0 for success and -1 for fail. it returns 0.
+45. -1. since fd2 is a copy of the file descriptor fd1 and it has been closed already, it fails to try and close it again.
+46. write does them in order whereas using fprintf has the err print to the terminal first, then the stdout strings.
+47. it now does them both in order. it looks like fprintf uses a buffer of some kind and flushing it forces a writeout of what is in the buffer. That was 'abc' is printed before the 'def' from stderr.
+
+
+### Part 6
+48. exporting a variable into the environment allowed for the program to pick it up and print it.
