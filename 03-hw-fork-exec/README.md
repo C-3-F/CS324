@@ -100,15 +100,15 @@ should read all of problems 4 through 11 before you start.
     output.*
 
     ```
-[SSH] 03-hw-fork-exec git:(master U:1 ?:4) ✗ ➜ ps --forest -o user,pid,ppid,state,ucmd -p 317876,317877
-USER         PID    PPID S CMD
-cf436     317876  316307 S fork
-cf436     317877  317876 S  \_ fork
-[SSH] 03-hw-fork-exec git:(master U:1 ?:4) ✗ ➜ ps --forest -o user,pid,ppid,state,ucmd -p 317876,317877
-USER         PID    PPID S CMD
-cf436     317876  316307 S fork
-cf436     317877  317876 Z  \_
-```
+	[SSH] 03-hw-fork-exec git:(master U:1 ?:4) ✗ ➜ ps --forest -o user,pid,ppid,state,ucmd -p 317876,317877
+	USER         PID    PPID S CMD
+	cf436     317876  316307 S fork
+	cf436     317877  317876 S  \_ fork
+	[SSH] 03-hw-fork-exec git:(master U:1 ?:4) ✗ ➜ ps --forest -o user,pid,ppid,state,ucmd -p 317876,317877
+	USER         PID    PPID S CMD
+	cf436     317876  316307 S fork
+	cf436     317877  317876 Z  \_
+    ```
  
 
     Note: to copy the command and output from only a single tmux pane, do the
