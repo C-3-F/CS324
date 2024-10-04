@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 #include <ctype.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -101,6 +102,42 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+	char * argv[MAXLINE];
+	int bg = parseline(cmdline, argv);
+	int cmds[MAXARGS];
+	int stin_redirs[MAXARGS];
+	int stdout_redirs[MAXARGS];
+
+	fprintf(stderr, "argv: %s\n", argv[0]);
+	int numCommands = parseargs(argv, cmds, stin_redirs, stdout_redirs);
+	builtin_cmd(argv);
+
+	int pid = fork();
+
+	if (pid == 0) { // Is child process
+		if (stin_redirs[0] > 0) { // check for std in redirects
+			char* inFilePath = argv[stin_redirs[0]];
+			int inFileDescriptor = open(inFilePath, O_RDONLY);
+			if (dup2(inFileDescriptor, STDIN_FILENO) == -1) {
+				fprintf(stderr, "Failed to Duplicate FD to stdin");
+			}
+			close(inFileDescriptor);
+		}
+		if (stdout_redirs[0] > 0) { // check for stdout redirects
+			char* outFilePath = argv[stdout_redirs[0]];
+			int outFileDescriptor = open(outFilePath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+			if (dup2(outFileDescriptor, STDOUT_FILENO) == -1) {
+				fprintf(stderr, "Failed to Duplicate FD to stdout");
+			}
+			close(outFileDescriptor);
+		}
+
+		execv(argv[0], argv); // Execute
+	}
+
+	setpgid(pid,pid);
+	waitpid(pid, NULL, 0);
+
 	return;
 }
 
@@ -228,6 +265,12 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
+	// fprintf(stderr, "In builtin_cmd\n");
+
+	if (strcmp(argv[0],"quit") == 0) {
+		fprintf(stderr, "In builtin_cmd\n");
+		exit(0);
+	}
 	return 0;     /* not a builtin command */
 }
 

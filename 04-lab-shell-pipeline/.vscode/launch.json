@@ -1,0 +1,36 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+       {
+          "name": "Test",
+          "type": "cppdbg",
+          "request": "launch",
+          "program": "${workspaceFolder}/tsh",  // Path to your program
+          "args": ["/bin/sleep", "10"],  // Optional: Add arguments to your program if needed
+          "stopAtEntry": false,
+          "cwd": "${workspaceFolder}",
+          "environment": [],
+          "externalConsole": false,
+          "MIMode": "gdb",
+          "setupCommands": [
+             {
+                "description": "Enable multi-threaded debugging",
+                "text": "-enable-pretty-printing",
+                "ignoreFailures": true
+             },
+             {
+                "description": "Enable fork debugging",
+                "text": "set follow-fork-mode child",  // You can also use 'parent'
+                "ignoreFailures": false
+             }
+          ],
+          "miDebuggerPath": "/usr/bin/gdb",  // Adjust based on your environment
+          "logging": {
+             "trace": true,
+             "traceResponse": true,
+             "engineLogging": true
+          }
+       }
+    ]
+ }
+ 
