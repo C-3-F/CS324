@@ -5,8 +5,8 @@
           "name": "Test",
           "type": "cppdbg",
           "request": "launch",
-          "program": "${workspaceFolder}/tsh",  // Path to your program
-          "args": ["/bin/sleep", "10"],  // Optional: Add arguments to your program if needed
+          "program": "${workspaceFolder}/${fileBasenameNoExtension}",  // Path to your program
+          "args": [],  // Optional: Add arguments to your program if needed
           "stopAtEntry": false,
           "cwd": "${workspaceFolder}",
           "environment": [],
@@ -19,11 +19,11 @@
                 "ignoreFailures": true
              },
              {
-                "description": "Enable fork debugging",
-                "text": "set follow-fork-mode child",  // You can also use 'parent'
-                "ignoreFailures": false
+               "description": "Enable forked debugging",
+               "text": "-gdb-set follow-fork-mode child"
              }
           ],
+          "preLaunchTask": "C/C++: gcc build active file",
           "miDebuggerPath": "/usr/bin/gdb",  // Adjust based on your environment
           "logging": {
              "trace": true,
