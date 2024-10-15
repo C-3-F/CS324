@@ -69,12 +69,56 @@ int main(int argc, char *argv[]) {
 		kill(pid, SIGTERM);
 		break;
 	case '6':
+		kill(pid, SIGHUP);
+		sleep(2);
+		kill(pid, 10);
+		sleep(1);
+		kill(pid, 12);
+		sleep(1);
+		kill(pid, 16);
+		sleep(1);
+		kill(pid, SIGTERM);
+		sleep(1);
 		break;
 	case '7':
+		kill(pid, SIGHUP);
+		sleep(2);
+		kill(pid, 10);
+		sleep(1);
+		kill(pid, 12);
+		sleep(1);
+		kill(pid, SIGTERM);
+		sleep(1);
 		break;
 	case '8':
+		kill(pid, 31);
+		sleep(2);
+		kill(pid, SIGHUP);
+		sleep(1);
+		kill(pid, 10);
+		sleep(1);
+		kill(pid, 30);
+		sleep(1);
+		kill(pid, SIGTERM);
+		sleep(1);
+		kill(pid, 12);
+		sleep(1);
+		kill(pid, SIGTERM);
+		sleep(1);
 		break;
 	case '9': 
+		kill(pid, 31);
+		sleep(1);
+		kill(pid, SIGQUIT);
+		sleep(1);
+		kill(pid, 31);
+		sleep(1);
+
+		kill(pid, 12);
+		sleep(1);
+		kill(pid, SIGTERM);
+		sleep(1);
+		
 		break;
 
 	}
