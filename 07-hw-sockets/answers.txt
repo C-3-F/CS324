@@ -1,0 +1,6 @@
+1. socket() and getaddrinfo
+2. Command line arguments
+
+3. They are all the same
+4. It just chooses a random port for each time.
+5. One for each client

@@ -147,83 +147,37 @@ int main(int argc, char *argv[]) {
 
   /* SECTION C - interact with server; send, receive, print messages */
 
-  int MAX_BYTES = 4096;
-  int CHUNK_SIZE = 512;
-  unsigned char buf[4096];
-  size_t bytes_read;
+  // Send remaining command-line arguments as separate
+  // datagrams, and read responses from server.
+  for (int j = hostindex + 2; j < argc; j++) {
+    // buf will hold the bytes we read from the socket.
+    char buf[BUF_SIZE];
 
-  size_t total_bytes_read = 0;
-
-  while (total_bytes_read < MAX_BYTES) {
-
-    size_t bytes_to_read = (MAX_BYTES - total_bytes_read < CHUNK_SIZE)
-                                ? MAX_BYTES - total_bytes_read
-                                : CHUNK_SIZE;
-
-    bytes_read = read(STDIN_FILENO, buf + total_bytes_read, bytes_to_read);
-
-    if (bytes_read < 0) {
-      perror("read error\n");
+    // len includes the count of all characters comprising the
+    // null-terminated string argv[j], but not the null byte
+    // itself.
+    size_t len = strlen(argv[j]);
+    if (len > BUF_SIZE) {
+      fprintf(stderr, "Ignoring long message in argument %d\n", j);
+      continue;
     }
 
-    if (bytes_read == 0) { // EOF
-      break;
+    ssize_t nwritten = send(sfd, argv[j], len, 0);
+    // ssize_t nwritten = sendto(sfd, argv[j], len, 0, remote_addr, addr_len);
+    if (nwritten < 0) {
+      perror("send");
+      exit(EXIT_FAILURE);
     }
-    total_bytes_read += bytes_read;
-  }
-  fprintf(stderr, "read %zu bytes\n", total_bytes_read);
+    printf("Sent %zd bytes: %s\n", len, argv[j]);
 
-  size_t total_bytes_wrote = 0;
-  size_t bytes_wrote;
-
-  while (total_bytes_wrote <= total_bytes_read) {
-
-    size_t bytes_to_write = (total_bytes_read - total_bytes_wrote < CHUNK_SIZE)
-                                ? total_bytes_read - total_bytes_wrote
-                                : CHUNK_SIZE;
-
-    bytes_wrote = send(sfd, buf + total_bytes_wrote, bytes_to_write, 0);
-    
-    if (bytes_wrote < 0) {
-      perror("read error\n");
-    }
-
-    if (bytes_wrote == 0) { // EOF
-      break;
-    }
-    total_bytes_wrote += bytes_wrote;
-  }
-  fprintf(stderr, "wrote %zu bytes\n", total_bytes_wrote);
-
-
-  int MAX_RETURN_BYTES = 16384;
-  unsigned char rec_return[MAX_RETURN_BYTES];
-  total_bytes_read = 0;
-  bytes_read = 0;
-
-  while (total_bytes_read < MAX_RETURN_BYTES) {
-
-    size_t bytes_to_read = (MAX_RETURN_BYTES - total_bytes_read < CHUNK_SIZE)
-                                ? MAX_RETURN_BYTES - total_bytes_read
-                                : CHUNK_SIZE;
-
-    bytes_read = recv(sfd, rec_return + total_bytes_read, bytes_to_read, 0);
-
-    if (bytes_read < 0) {
-      perror("read error\n");
-    }
-
-    if (bytes_read == 0) { // EOF
-      break;
-    }
-    total_bytes_read += bytes_read;
-  }
-
-
-  int status = write(STDOUT_FILENO, rec_return, total_bytes_read);
-  if (status == -1)
-  {
-    perror("write error");
+    //     ssize_t nread = recv(sfd, buf, BUF_SIZE, 0);
+    //    buf[nread] = '\0';
+    //    if (nread < 0) {
+    //      perror("read");
+    //      exit(EXIT_FAILURE);
+    //    }
+    //
+    //  printf("Received %zd bytes: %s\n", nread, buf);
   }
 
   exit(EXIT_SUCCESS);

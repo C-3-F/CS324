@@ -87,9 +87,13 @@ questions.
 
  1. *What two system calls are used to create and prepare a (UDP) client socket
     for reading and writing, before you ever read or write to that socket?*
+    
+    getaddrinfo and socket
 
  2. *Where do the strings come from that are sent to the server (i.e., written
     to the socket)?*
+
+    command line arguments
 
 Open `server.c`, and look at what it does.  Specific questions about the server
 will come later.
@@ -154,12 +158,16 @@ Now run the command a second time:
     the value of the local port used by the client for _different_ messages
     sent using the _same_ socket (i.e., from running `./client` a single
     time)?*
+    They are the same
+
  4. *What do you notice about the value of the local port used by the client
     for _different_ messages sent using _different_ sockets (i.e., from running
     `./client` multiple times)?*
+    They are different and it chooses randomly
  5. *Looking inside `server.c`, how many sockets does the server use to
     communicate with multiple clients?*  For example, one for _each_ client,
     one for _all_ clients, etc.
+    It uses only one port
 
 Let's learn a bit more about how and when the _local_ address and port are set
 on the socket used by the client.  Modify `client.c` in the following ways:
@@ -186,6 +194,7 @@ before.
 
  6. *How do the local address and port values printed out by the client
      compare to those detected by the server?*
+it is 0.0.0.0 locally on the client and the actual port and address on the server
 
 In `client.c` copy the lines of code that retrieve and print the local address
 and port from the socket--starting with the initialization of the `addr_len`,
@@ -206,6 +215,7 @@ before.
     the calls to `getsockname()`.  *What do the differences in output teach
     you about _when_ the local port is set for a given socket?*  Note that the
     local address remains unset when `sendto()` is used instead of `connect()`.
+    The port is initially unset to 0, but then is randomly assigned to the same one the server reads.
 
 Let's make some other observations.  First, note that `strlen()` is used on
 `argv[j]` only because we know it is a null-terminated string.  `strlen()`
@@ -259,22 +269,29 @@ before.
 
  8. *How many _total_ calls to `sendto()` were made by the client?* Hint: refer
     to `client.c`.
+    3
+
  9. *How many messages had been received by the server's kernel and were still
     waiting to be read by the server-side process immediately before the server
     called `recvfrom()` for the second time?* You can assume that the messages
     were sent immediately when the client called `sendto()` and that any network
     delay was negligible.
+    2
+
  10. Consider _only_ the messages referred to in the previous question, i.e.,
      those still waiting to be read immediately before the server called
      `recvfrom()` for the second time. *How many calls to `recvfrom()`
      (including the second call and any additional calls) were required for the
      server process to read all of those messages/bytes?* Hint: look at the
-     server output, and refer to `server.c`.
- 11. *When more than one message was ready for reading, why didn't the server
+    server output, and refer to `server.c`.
+    2
+
+  11. *When more than one message was ready for reading, why didn't the server
      read _all_ the messages that were ready with a single call to
      `recvfrom()`?*  Hint: see the man page for `udp(7)`, specifically within the
      first three paragraphs of the "DESCRIPTION" section.
-
+      they are in different datagrams/packets. All receive operations only return 1 packet.
+      It only returns one packet for each receive call
 Change the value of the `len` argument passed to `recvfrom()` in `server.c`
 from `BUF_SIZE` to `1`.
 
@@ -287,9 +304,11 @@ before.
 
  12. *How many total calls to `recvfrom()` were made?*  Hint: look at the
      server output, and refer to `server.c`.
+     3
 
  13. *Were all the bytes _sent_ by the client _received_ by the application?*
      Hint: look at the server output, and refer to `server.c`.
+    No. Only 1 byte of each
 
 Restore the value of the `len` argument passed to `recvfrom()` in `server.c` to
 `BUF_SIZE`.
@@ -354,12 +373,14 @@ Make the following modifications:
      call to `socket()`), after `listen()` is called on it, compare with the
      role of the socket returned from the call to `accept()`?*  See the man
      pages for `listen()` and `accept()`.
+     The original socket becomes a passive socket that listens for connections. The accept call takes pending connections and creates new sockets for them.
 
  15. *With the new changes you have implemented, how have the semantics
      associated with the call to `connect()` changed?  That is, what will
      happen now when you call `connect()` that is different from when you
      called `connect()` with a UDP socket?*  See the man pages for `connect(2)`,
      `tcp(7)`, and `udp(7)`.
+     The connect will now directly interact with the accepted and verified connection rather than just a listening socket.
 
 Re-run `make` to rebuild both binaries.  Interrupt and restart the server in
 the left "remote" pane.
@@ -380,13 +401,18 @@ on which the server program is now listening, respectively.)
      the value of the local port used by the client for _different_ messages
      sent using the _same_ socket (i.e., from running `./client` a single
      time)?*
+    It is the same
+
  17. *What do you notice about the value of the local port used by the client
      for _different_ messages sent using _different_ sockets (i.e., from
      running `./client` multiple times)?*
+    It is different for each run
+
  18. *Looking inside `server.c`, how many sockets does the server use to
      communicate with multiple clients?*  For example, one for _each_ client,
      one for _all_ clients, etc.  Explain how and why this behavior is
      different than that exemplified in question 5.
+    Is uses a different socket for each connection. TCP generates and creates a new socket connection for each client exclusively.
 
 Make the following modifications, which mirror those made in Part 1
 (immediately preceding questions 8 - 11):
@@ -414,15 +440,20 @@ pane), run the following in the right "local" pane:
 
  19. *How many _total_ calls to `send()` were made by the client?* Hint: refer
      to `client.c`.
+     3
+
  20. *How many messages had been received by the server's kernel and were still
      waiting to be read by the server-side process immediately before the
      server called `recv()`?*   You can assume that the messages were sent
      immediately when the client called `send()` and that any network delay
      was negligible.
+    3
+
  21. *How many total calls to `recv()` were required for the server process to
      read all of the messages/bytes that were sent?*  Hint: look at the server
      output, and refer to `server.c`.  Explain how and why this behavior is
      different than that exemplified in question 10.
+    1. All of the messages were sent at once in the single TCP connection. 
 
 Change the value of the `len` argument passed to `recv()` in `server.c` from
 `BUF_SIZE` to `1`.
@@ -436,9 +467,11 @@ before.
 
  22. *How many total calls to `recv()` were made?*  Hint: look at the server
      output, and refer to `server.c`.
+     12
 
  23. *Were all the bytes _sent_ by the client _received_ by the application?*
      Hint: look at the server output, and refer to `server.c`.
+      yes, eventually.
 
 Restore the value of the `len` argument passed to `recv()` in `server.c` to
 `BUF_SIZE`.
@@ -531,7 +564,7 @@ Then re-run the client program:
      Hint: Because the bytes sent by the client should match the bytes in
      `alpha.txt`, the output of `sha1sum` should be the same as running `sha1sum`
      against `alpha.txt` itself.
-
+0ef39a3f241cdd6552ad131e01afa9171b3dab8d 
 Modify `client.c`:
 
  - After _all_ the data read from standard input has been sent to the socket,
@@ -597,6 +630,7 @@ cat bestill.txt
      ```
 
      Hint: it should start with `0dd26e...`
+0dd26ed8deacdffb8dc1bb20eec8cf01f027892f 
 
 The `strip_http.py` script simply strips the HTTP response headers from the
 output, so that you are left with just the content.  The `sha1sum` result,
@@ -626,7 +660,7 @@ program (e.g., a Web browser) to check its correctness.
      ```
 
      Hint: it should start with `c03ce5...`
-
+c03ce59f9d77e2a3cf001d9dfcb66675ac1a5a81 
 
 ## Part 4: Review Questions
 
@@ -637,20 +671,24 @@ code/questions, set up your own experiments, and/or read the man pages.
      or TCP), and there are no messages are available at the socket for
      reading?  Hint: see the man page for `recv(2)`, especially the
      "DESCRIPTION" section.  See also the instructions in Part 1.
+     It blocks and waits for a message to arrive
 
  28. What happens when you call `recv()` on an open socket (UDP or TCP), and
      the number of bytes available for reading is less than the requested
      amount?  Hint: see the man pages for `read(2)` and `recv(2)`, especially
      the "RETURN VALUE" section.
+     It only returns the number of bytes received, even if it is less than the amount.
 
  29. What happens you you call `recv()` on an open UDP socket, and you specify
      a length that is less than the length of the next datagram?  Hint: see the
      man page for `udp(7)`, specifically within the first three paragraphs of
      the "DESCRIPTION" section.  See also questions 12 and 13.
+     The data will be truncated 
 
  30. What happens you you call `recv()` on an open TCP socket, and you specify
      a length that is less than the number of bytes available for reading?
      Hint: see questions 22 and 23.
+     It will read the amount requested but the bytes are still pending to be read so they can be read in subsequent requests.
 
 Close down all the terminal panes in your `tmux` session to _close_ your `tmux`
 session.
