@@ -20,10 +20,11 @@ int verbose = 0;
 
 struct response_values {
   unsigned char chunk_length;
-  char *chunk;
+  unsigned char null_terminated_chunk_length;
+  char chunk[MAX_RESPONSE_SIZE - 8];
   unsigned char op_code;
   unsigned short op_param;
-  int nonce;
+  unsigned int nonce;
 };
 
 
@@ -164,19 +165,28 @@ int extract_response_values(const unsigned char * response, struct response_valu
   }
 
   memcpy(&values->chunk, response + 1, (size_t)values->chunk_length);
-  values->chunk += '\0';
-  values->chunk_length += 1;
-  memcpy(&values->op_code, response + values->chunk_length + 2, 1);
-  memcpy(&values->op_param, response + values->chunk_length + 3, 2);
-  memcpy(&values->nonce, response + values->chunk_length + 5, 4);
+  values->chunk[values->chunk_length] = '\0';
+  
+  memcpy(&values->op_code, response + values->chunk_length + 1, 1);
 
+  unsigned short network_op_param;
+  memcpy(&network_op_param, response + values->chunk_length + 2, 2);
+  values->op_param = ntohs(network_op_param);
+
+  unsigned int network_nonce;
+  memcpy(&network_nonce, response + values->chunk_length + 4, 4);
+  values->nonce = ntohl(network_nonce);
+
+  values->null_terminated_chunk_length = values->chunk_length + 1;
   return 0;
 }
 
 
 void print_response_values (const struct response_values * values) {
   printf("chunk length: %d\n", values->chunk_length);
+  printf("null-terminated chunk length: %d\n", values->null_terminated_chunk_length);
   printf("chunk content: %s\n", values->chunk);
   printf("op code: %x\n", values->op_code);
   printf("op param: %x\n", values->op_param);
+  printf("nonce: %u\n", values->nonce);
 }
