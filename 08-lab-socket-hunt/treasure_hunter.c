@@ -9,6 +9,7 @@
 #include <sys/types.h>
 
 #define MAX_RESPONSE_SIZE 256
+#define MAX_TREASURE_SIZE 1024
 
 #define USERID 1823700680
 
@@ -21,16 +22,17 @@ int verbose = 0;
 struct response_values {
   unsigned char chunk_length;
   unsigned char null_terminated_chunk_length;
-  char chunk[MAX_RESPONSE_SIZE - 8];
+  char chunk[MAX_RESPONSE_SIZE - 7];
+  char null_terminated_chunk[MAX_RESPONSE_SIZE - 8];
   unsigned char op_code;
   unsigned short op_param;
   unsigned int nonce;
 };
 
-
 void print_bytes(unsigned char *bytes, int byteslen);
-int extract_response_values(const unsigned char *response, struct response_values *values);
-void print_response_values (const struct response_values * values);
+int extract_response_values(const unsigned char *response,
+                            struct response_values *values);
+void print_response_values(const struct response_values *values);
 
 int main(int argc, char *argv[]) {
   char *server = argv[1];
@@ -38,9 +40,11 @@ int main(int argc, char *argv[]) {
   char *level = argv[3];
   char *seed = argv[4];
 
-  printf("server: %s | port: %s | level: %s | seed: %s\n", server, port, level,
-         seed);
+  if (verbose) {
 
+    printf("server: %s | port: %s | level: %s | seed: %s\n", server, port,
+           level, seed);
+  }
   int port_num = atoi(port);
   int level_num = atoi(level);
   unsigned short seed_num = atoi(seed);
@@ -70,17 +74,24 @@ int main(int argc, char *argv[]) {
   struct sockaddr *remote_addr = (struct sockaddr *)&remote_addr_ss;
 
   // Set up remote addr reference
-  printf("Setting up remote\n");
+  if (verbose) {
+    printf("Setting up remote\n");
+  }
   memcpy(remote_addr, info->ai_addr, sizeof(struct sockaddr_storage));
   char remote_ip[INET6_ADDRSTRLEN];
   unsigned short remote_port = 0;
 
-  printf("populating addr\n");
+  if (verbose) {
+
+    printf("populating addr\n");
+  }
   // populate_sockaddr(remote_addr, hints.ai_family, NULL, remote_port );
   parse_sockaddr(remote_addr, remote_ip, &remote_port);
 
   // Set up local addr reference
-  printf("Setting up local\n");
+  if (verbose) {
+    printf("Setting up local\n");
+  }
 
   struct sockaddr_storage local_addr_ss;
   struct sockaddr *local_addr = (struct sockaddr *)&local_addr_ss;
@@ -92,10 +103,15 @@ int main(int argc, char *argv[]) {
   s = getsockname(sock, local_addr, &addr_len);
   parse_sockaddr(local_addr, local_ip, &local_port);
 
-  printf("addr info: ip: %s | port: %d\n", remote_ip, remote_port);
-  // Server Test
+  if (verbose) {
+    printf("addr info: ip: %s | port: %d\n", remote_ip, remote_port);
+  }
 
-  printf("Setting up server test\n");
+  // Send initial request
+
+  if (verbose) {
+    printf("Setting up server test\n");
+  }
   ssize_t n_written =
       sendto(sock, init_request_body, 8, 0, remote_addr, addr_len);
 
@@ -103,16 +119,56 @@ int main(int argc, char *argv[]) {
   ssize_t n_received = recvfrom(sock, response_buf, MAX_RESPONSE_SIZE, 0,
                                 remote_addr, &addr_len);
 
-  printf("Response size: %zu\n", n_received);
-  print_bytes(response_buf, n_received);
+  if (verbose) {
+    printf("Response size: %zu\n", n_received);
+    print_bytes(response_buf, n_received);
+  }
 
   struct response_values *values = malloc(sizeof(struct response_values));
-  
-  printf("extracting\n");
-  int err = extract_response_values(response_buf, values);
-  printf("printing\n");
 
-  print_response_values(values);
+  int err = extract_response_values(response_buf, values);
+
+  if (verbose) {
+    printf("inital response values:\n");
+    print_response_values(values);
+  }
+  // Loop through to find treasure
+  unsigned char treasure[MAX_TREASURE_SIZE];
+  int treasure_index = 0;
+
+  // Add data from initial response to treasure
+  memcpy(treasure, values->chunk, values->chunk_length);
+  treasure_index += values->chunk_length;
+
+  while (values->chunk_length != 0) {
+
+    // Follow up response
+    unsigned char follow_up_request_body[4];
+    memset(&follow_up_request_body, 0, sizeof(unsigned int));
+    unsigned int network_nonce = htonl(values->nonce + 1);
+
+    memcpy(&follow_up_request_body, &network_nonce, sizeof(unsigned int));
+
+    n_written =
+        sendto(sock, follow_up_request_body, 4, 0, remote_addr, addr_len);
+
+    memset(response_buf, 0, MAX_RESPONSE_SIZE);
+    n_received = recvfrom(sock, response_buf, MAX_RESPONSE_SIZE, 0, remote_addr,
+                          &addr_len);
+
+    extract_response_values(response_buf, values);
+
+    memcpy(treasure + treasure_index, values->chunk, values->chunk_length);
+    treasure_index += values->chunk_length;
+
+    if (verbose) {
+      printf("response values:\n");
+      print_bytes(response_buf, n_received);
+    }
+  }
+  treasure[treasure_index + 1] = '\0';
+
+  printf("%s\n", treasure);
   // ******* Levels ********
 }
 
@@ -157,16 +213,21 @@ void print_bytes(unsigned char *bytes, int byteslen) {
   fflush(stdout);
 }
 
-int extract_response_values(const unsigned char * response, struct response_values *values) {
+int extract_response_values(const unsigned char *response,
+                            struct response_values *values) {
 
   values->chunk_length = response[0];
   if (values->chunk_length > 127) {
     return -1;
   }
+  memset(values->chunk, 0, MAX_RESPONSE_SIZE - 8);
+  memset(values->null_terminated_chunk, 0, MAX_RESPONSE_SIZE - 7);
 
   memcpy(&values->chunk, response + 1, (size_t)values->chunk_length);
-  values->chunk[values->chunk_length] = '\0';
-  
+  memcpy(&values->null_terminated_chunk, response + 1,
+         (size_t)values->chunk_length);
+  values->null_terminated_chunk[values->chunk_length] = '\0';
+
   memcpy(&values->op_code, response + values->chunk_length + 1, 1);
 
   unsigned short network_op_param;
@@ -181,11 +242,11 @@ int extract_response_values(const unsigned char * response, struct response_valu
   return 0;
 }
 
-
-void print_response_values (const struct response_values * values) {
+void print_response_values(const struct response_values *values) {
   printf("chunk length: %d\n", values->chunk_length);
-  printf("null-terminated chunk length: %d\n", values->null_terminated_chunk_length);
-  printf("chunk content: %s\n", values->chunk);
+  printf("null-terminated chunk length: %d\n",
+         values->null_terminated_chunk_length);
+  printf("chunk content: %s\n", values->null_terminated_chunk);
   printf("op code: %x\n", values->op_code);
   printf("op param: %x\n", values->op_param);
   printf("nonce: %u\n", values->nonce);
