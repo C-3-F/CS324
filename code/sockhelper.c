@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 
-#include "sockhelper.h"
+#include "../include/sockhelper.h"
 
 /*
  * Return the address family associated with a socket.

@@ -142,6 +142,53 @@ int main(int argc, char *argv[]) {
 
   while (values->chunk_length != 0) {
 
+    // OPCODE 1
+    if (values->op_code == 1) {
+      populate_sockaddr(remote_addr, remote_addr->sa_family, remote_ip,
+                        values->op_param);
+    }
+
+    // OPCODE 2
+    if (values->op_code == 2) {
+      sock = socket(info->ai_family, info->ai_socktype, 0);
+
+      populate_sockaddr(local_addr, local_addr->sa_family, NULL,
+                        values->op_param);
+      if (bind(sock, local_addr, sizeof(struct sockaddr_storage)) > 0) {
+        perror("bind error");
+      }
+    }
+
+    // OPCODE 3
+    if (values->op_code == 3) {
+      struct sockaddr_storage sender_addr;
+      socklen_t addr_len = sizeof(sender_addr);
+
+      unsigned short m = values->op_param;
+      if (verbose) {
+        printf("M: %u\n", m);
+      }
+
+      unsigned int port_sum = 0;
+      for (int i = 0; i < m; i++) {
+        char buf[1];
+        int bytes_received =
+            recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr *)&sender_addr,
+                     &addr_len);
+
+        if (bytes_received == -1) {
+          perror("OP3 bytes received error");
+        }
+
+        char ip[addr_len];
+        unsigned short port;
+        parse_sockaddr((struct sockaddr *)&sender_addr, ip, &port);
+        port_sum += port;
+      }
+
+      values->nonce = port_sum;
+    }
+
     // Follow up response
     unsigned char follow_up_request_body[4];
     memset(&follow_up_request_body, 0, sizeof(unsigned int));
@@ -165,8 +212,11 @@ int main(int argc, char *argv[]) {
       printf("response values:\n");
       print_bytes(response_buf, n_received);
     }
+
+    parse_sockaddr(local_addr, local_ip, &local_port);
+    parse_sockaddr(remote_addr, remote_ip, &remote_port);
   }
-  treasure[treasure_index + 1] = '\0';
+  treasure[treasure_index] = '\0';
 
   printf("%s\n", treasure);
   // ******* Levels ********
