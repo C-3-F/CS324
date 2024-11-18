@@ -1,0 +1,34 @@
+1. It reads until the end of the '>' characters marked with a single line with a carraige return.
+2. It reads the byte count from the '}' line.
+3. 200
+4. 404
+5. Similar to the server, it reads header lines until it reads a line with a single carraige return
+6. It reads the byte count from the '{' line
+7. It reads from the content-type header from the server response
+8. Content Types 
+	a: text/html
+	b: text/plain
+	c: image/jpg
+	d: text/html
+	e: text/plain
+
+11. Response sizes:
+	a: 129 bytes
+	b: 6 bytes
+	e: 108 bytes
+
+14. example.com
+15. localhost
+16. error
+17. 1234
+18. /foo.html
+19. /cgi-bin/foo?univ=byu&class=CS324&msg=hello%3Dworld%21
+20. example.com
+21. example.com:1234
+22. localhost
+23. univ=byu&class=CS324&msg=hello%3Dworld%21
+24. space
+25. !
+
+26: c0140d1975d6e6ba09cf21d9bf3e476d619b4128  -
+27: echo "username=user&password=pw" | QUERY_STRING="univ=byu&class=CS324&msg=hello%3Dworld%21" CONTENT_LENGTH="25" ./myprog1 | sha1sum

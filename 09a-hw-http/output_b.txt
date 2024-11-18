@@ -1,0 +1,21 @@
+*   Trying 2620:10f:3007:a002:a6bb:6dff:fe81:9293:5000...
+* connect to 2620:10f:3007:a002:a6bb:6dff:fe81:9293 port 5000 failed: Connection refused
+*   Trying 192.168.2.129:5000...
+* Connected to alaska (192.168.2.129) port 5000 (#0)
+> GET /bar.txt HTTP/1.1
+> Host: alaska:5000
+> User-Agent: curl/7.81.0
+> Accept: */*
+> 
+* Mark bundle as not supporting multiuse
+* HTTP 1.0, assume close after body
+< HTTP/1.0 200 OK
+< Server: SimpleHTTP/0.6 Python/3.10.12
+< Date: Mon, 18 Nov 2024 01:33:29 GMT
+< Content-type: text/plain
+< Content-Length: 6
+< Last-Modified: Mon, 09 Sep 2024 17:10:31 GMT
+< 
+{ [6 bytes data]
+* Closing connection 0
+hello
