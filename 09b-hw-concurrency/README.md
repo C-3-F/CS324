@@ -103,16 +103,24 @@ line is a workaround.
 
  1. Show the output from the `ps` command.
 
+USER         PID    PPID NLWP     LWP S CMD
+cf436    1082062 1076755    1 1082062 S echoserveri
+
  2. From the `ps` output, how many (unique) processes are running and why?
     Use the PID and LWP to identify different threads or processes.
+    
+    1
 
  3. From the `ps` output, how many (unique) threads are running with each
     proces and why?  Use the PID and LWP to identify different threads or
     processes.
 
+   1
+
  4. Enter `Ctrl`+`c` on the pane in which `nc` was first executed to interrupt
     it.  *What happens to the `nc` processes in the other windows and why?*
 
+   the next one fires off.
 Stop the server by using `ctrl`+`c` in the appropriate pane.
 
 
@@ -121,14 +129,30 @@ Stop the server by using `ctrl`+`c` in the appropriate pane.
 Repeat the exercises from Part 1 (except question 4), replacing all instances
 of `echoserveri` with `echoserverp`, including in the `ps` command.  Answer
 questions 1 through 3 for `echoserverp` as questions 5 through 7.
+USER         PID    PPID NLWP     LWP S CMD
+cf436    1095074 1076755    1 1095074 S echoserverp
+cf436    1095616 1095074    1 1095616 S echoserverp
+cf436    1095718 1095074    1 1095718 S echoserverp
+cf436    1095878 1095074    1 1095878 S echoserverp
 
+there are 4 unique processes. each new connection creates a fork
+
+there are also 4 unique threads just because there are 4 processes
 
 # Part 3: Simple Thread-based Concurrency
 
 Repeat the exercises from Part 1 (except question 4), replacing all instances
 of `echoserveri` with `echoservert`, including in the `ps` command.  Answer
 questions 1 through 3 for `echoservert` as questions 8 through 10.
+USER         PID    PPID NLWP     LWP S CMD
+cf436    1102315 1076755    4 1102315 S echoservert
+cf436    1102315 1076755    4 1102459 S echoservert
+cf436    1102315 1076755    4 1102619 S echoservert
+cf436    1102315 1076755    4 1102717 S echoservert
 
+There is only one process this time. The server is only one process
+
+There are four threads. Each new connection creates a thread on the fly.
 
 # Part 4: Threadpool-based Concurrency
 
@@ -136,6 +160,20 @@ Repeat the exercises from Part 1 (except question 4), replacing all instances
 of `echoserveri` with `echoservert_pre`, including in the `ps` command.  Answer
 questions 1 through 3 for `echoservert_pre` as questions 11 through 13.
 
+USER         PID    PPID NLWP     LWP S CMD
+cf436    1106170 1076755    9 1106170 S echoservert_pre
+cf436    1106170 1076755    9 1106171 S echoservert_pre
+cf436    1106170 1076755    9 1106172 S echoservert_pre
+cf436    1106170 1076755    9 1106173 S echoservert_pre
+cf436    1106170 1076755    9 1106174 S echoservert_pre
+cf436    1106170 1076755    9 1106175 S echoservert_pre
+cf436    1106170 1076755    9 1106176 S echoservert_pre
+cf436    1106170 1076755    9 1106177 S echoservert_pre
+cf436    1106170 1076755    9 1106178 S echoservert_pre
+
+There is only one unique process. Similarly it is just one parent program that kicks off threads for each connection
+
+There are 9 threads. It has a dedicated pool of threads to handle requests as they come. There is the main thread and then a thread pool of 8 workers to handle requests.
 
 # Part 5: Producer-Consumer Review
 
@@ -168,11 +206,18 @@ Use the output and the code itself to answer the following questions.
 
  14. How many producer threads are running?
 
+      1 -- just the main thread
+
  15. How many consumer threads are running?
 
+      8-- 
+
  16. What is/are the producer thread(s) waiting on?
+      a new connection to put in the buffer
 
  17. What is/are the consumer thread(s) waiting on?
+      something (connections) to enter the buffer to process
+
 
 In one of the "client" panes run the following:
 
@@ -185,12 +230,19 @@ nc localhost port
  18. What event changes the state of the producer (i.e., so it is no longer
      waiting)?
 
+     It receives a connnection from the client
+
  19. What event changes the state of the consumer(s)?
 
+   the connection entered the buffer
+
  20. How many consumers change state?
+      only 1
+
 
  21. What is the producer thread now waiting on?
 
+      another connection
 
 Answer the following questions, considering the three concurrency models
 examined in this assignment: processed-based (`echoserverp`); thread-based with
@@ -204,15 +256,24 @@ spawning threads on-the-fly (`echoservert`); and threadpool-based
      clients connect and are handled, and ignore any cost associated with
      server start-up.
 
+      The on-the-fly method will be the slowest because it has to create threads during every connection.
+
+
  23. Which of the concurrency models has the most expensive _start-up_ cost and
      why?  Consider only the cost associated with server start-up, and ignore
      any cost at the time new clients connect and are handled.
+
+     The thread pool will be the slowest because it has to allocate all the thread specific data beforehand
 
  24. Which (one or more) of the three concurrency models, as implemented in
      this assignment, has/have an explicit limitation in terms of number of
      clients that can be handled concurrently and why?  Assume that system
      resources are unlimited.
 
+     the `no-concurrency` model and the `threadpool-based concurrency` models. The no concurrency can only handle one connection at a time. and the threadpool based one predefines the number of threads that are in the pool.
+
  25. Which (one or more) of the three of the models allow(s) allow sharing of
      memory and data structures without the use of inter-process communication
      (e.g., pipes, sockets) and why?
+
+     Both of the thread methods share memory and data structures. Threads share a memory space within a process which allows for shared data.
