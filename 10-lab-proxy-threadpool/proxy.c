@@ -4,11 +4,15 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <pthread.h>
 
 #include "sockhelper.h"
+#include "sbuf.h"
 
 /* Recommended max object size */
 #define MAX_OBJECT_SIZE 102400
+#define NUM_THREADS 8
+#define SBUFSIZE 5
 
 static const char *user_agent_hdr =
     "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:97.0) "
@@ -19,7 +23,9 @@ void parse_request(char *, char *, char *, char *, char *);
 void test_parser();
 void print_bytes(unsigned char *, int);
 int open_sfd(int port);
-void handle_client(int sfd);
+void *handle_client(void *vargp);
+
+sbuf_t sbuf;
 
 int main(int argc, char *argv[])
 {
@@ -27,14 +33,26 @@ int main(int argc, char *argv[])
   printf("%s\n", user_agent_hdr);
 
   int sfd = open_sfd(atoi(argv[1]));
+
+  sbuf_init(&sbuf, SBUFSIZE);
+  pthread_t tid;
+
+  for (int i = 0; i < NUM_THREADS; i++)
+  {
+    pthread_create(&tid, NULL, handle_client, NULL);
+  }
+
   while (1)
   {
     struct sockaddr_storage remote_addr_ss;
     struct sockaddr *remote_addr = (struct sockaddr *)&remote_addr_ss;
     socklen_t addr_len = sizeof(struct sockaddr_storage);
     printf("accepting connections\n");
-    int conn = accept(sfd, remote_addr, &addr_len);
-    handle_client(conn);
+    // int *connfdptr = malloc(sizeof(int));
+    // *connfdptr = accept(sfd, remote_addr, &addr_len);
+    int connfd = accept(sfd, remote_addr, &addr_len);
+
+    sbuf_insert(&sbuf, connfd);
   }
   return 0;
 }
@@ -75,7 +93,7 @@ void parse_request(char *request, char *method, char *hostname, char *port,
 
   char url[256];
 
-  // Second space to get URL  
+  // Second space to get URL
   end_of_thing = strstr(beginning_of_thing, " ");
   strncpy(url, beginning_of_thing, end_of_thing - beginning_of_thing);
   url[end_of_thing - beginning_of_thing] = '\0';
@@ -231,78 +249,89 @@ int open_client_sfd(char *hostname, char *port)
   return sfd;
 }
 
-void handle_client(int conn)
+void *handle_client(void *vargp)
 {
-  char buf[1024];
-  ssize_t total_bytes = 0;
 
+  // int conn = *((int *)vargp);
+  // pthread_detach(pthread_self());
+  // free(vargp);
+
+  pthread_detach(pthread_self());
   while (1)
   {
-    total_bytes += recv(conn, buf + total_bytes, sizeof(buf - total_bytes), 0);
-    buf[total_bytes] = '\0';
-    if (complete_request_received(buf))
+    int conn = sbuf_remove(&sbuf);
+
+    char buf[1024];
+    ssize_t total_bytes = 0;
+
+    while (1)
     {
-      break;
+      total_bytes += recv(conn, buf + total_bytes, sizeof(buf - total_bytes), 0);
+      buf[total_bytes] = '\0';
+      if (complete_request_received(buf))
+      {
+        break;
+      }
     }
-  }
 
-  print_bytes((unsigned char *)buf, total_bytes);
+    print_bytes((unsigned char *)buf, total_bytes);
 
-  char method[16], hostname[64], port[8], path[64];
-  parse_request(buf, method, hostname, port, path);
-  printf("Method: %s\n", method);
-  printf("Hostname: %s\n", hostname);
-  printf("Port: %s\n", port);
-  printf("Path: %s\n", path);
+    char method[16], hostname[64], port[8], path[64];
+    parse_request(buf, method, hostname, port, path);
+    printf("Method: %s\n", method);
+    printf("Hostname: %s\n", hostname);
+    printf("Port: %s\n", port);
+    printf("Path: %s\n", path);
 
-  // Create new request
+    // Create new request
 
-  char new_request[1024];
-  int offset = 0;
+    char new_request[1024];
+    int offset = 0;
 
-  offset += sprintf(new_request, "%s %s HTTP/1.0\r\n", method, path);
-  if (strcmp(port, "80") == 0)
-  {
-    offset += sprintf(new_request + offset, "Host: %s\r\n", hostname);
-  }
-  else
-  {
-    offset += sprintf(new_request + offset, "Host: %s:%s\r\n", hostname, port);
-  }
-  offset += sprintf(new_request + offset, "%s\r\n", user_agent_hdr);
-  offset += sprintf(new_request + offset, "Connection: close\r\n");
-  offset += sprintf(new_request + offset, "Proxy-Connection: close\r\n");
-  offset += sprintf(new_request + offset, "\r\n");
-
-  printf("new request print: \n");
-  print_bytes((unsigned char *)new_request, strlen(new_request));
-
-
-  // printf("Connecting to server\n");
-  int server_conn = open_client_sfd(hostname, port);
-
-  // printf("Sending request to server\n");
-  send(server_conn, new_request, strlen(new_request), 0);
-
-  char response[16384];
-  ssize_t total_bytes_response = 0;
-  while (1)
-  {
-    int bytes_received = recv(server_conn, response + total_bytes_response, sizeof(response) - total_bytes_response, 0);
-    total_bytes_response += bytes_received;
-    if (bytes_received == 0)
+    offset += sprintf(new_request, "%s %s HTTP/1.0\r\n", method, path);
+    if (strcmp(port, "80") == 0)
     {
-      response[total_bytes_response] = '\0';
-      break;
+      offset += sprintf(new_request + offset, "Host: %s\r\n", hostname);
     }
+    else
+    {
+      offset += sprintf(new_request + offset, "Host: %s:%s\r\n", hostname, port);
+    }
+    offset += sprintf(new_request + offset, "%s\r\n", user_agent_hdr);
+    offset += sprintf(new_request + offset, "Connection: close\r\n");
+    offset += sprintf(new_request + offset, "Proxy-Connection: close\r\n");
+    offset += sprintf(new_request + offset, "\r\n");
+
+    printf("new request print: \n");
+    print_bytes((unsigned char *)new_request, strlen(new_request));
+
+    // printf("Connecting to server\n");
+    int server_conn = open_client_sfd(hostname, port);
+
+    // printf("Sending request to server\n");
+    send(server_conn, new_request, strlen(new_request), 0);
+
+    char response[16384];
+    ssize_t total_bytes_response = 0;
+    while (1)
+    {
+      int bytes_received = recv(server_conn, response + total_bytes_response, sizeof(response) - total_bytes_response, 0);
+      total_bytes_response += bytes_received;
+      if (bytes_received == 0)
+      {
+        response[total_bytes_response] = '\0';
+        break;
+      }
+    }
+
+    // printf("Response: \n");
+    print_bytes((unsigned char *)response, total_bytes_response);
+
+    send(conn, response, total_bytes_response, 0);
+
+    close(conn);
   }
-
-  // printf("Response: \n");
-  print_bytes((unsigned char *)response, total_bytes_response);
-
-  send(conn, response, total_bytes_response, 0);
-
-  close(conn);
+  // return NULL;
 }
 
 void print_bytes(unsigned char *bytes, int byteslen)
