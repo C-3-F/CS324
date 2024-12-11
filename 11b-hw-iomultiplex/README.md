@@ -134,13 +134,20 @@ can't simultaneously filter by both command name and user, so the above command
 line is a workaround.
 
  1. Show the output from the `ps` command.
+ 
+USER         PID    PPID NLWP     LWP S CMD
+cf436     872089  836780    1  872089 S echoservere
 
  2. From the `ps` output, how many (unique) processes are running and why?
     Use the PID and LWP to identify different threads or processes.
 
+1. There is simply one server
+
  3. From the `ps` output, how many (unique) threads are running with each
     process and why?  Use the PID and LWP to identify different threads or
     processes.
+
+    also 1. The server is the only thread.
 
 Stop each of the clients and then the server by using `ctrl`+`c` in each of the
 panes.
@@ -186,7 +193,7 @@ This sends four bytes to the server ("foo" plus newline).
  4. How many times did `epoll_wait()` return in conjunction with receiving the
     bytes sent by the client?  Do not include the event triggered by the
     incoming client connection, before data was sent.
-
+    4 times. 
 The inefficiency here is that `epoll_wait()` was called more times than was
 necessary.  Each time `recv()` was called in the loop, it could have been
 called again to get more bytes that were available to be read.  However, the
@@ -237,21 +244,30 @@ both `echoservere` and `nc` to help you answer.
  5. How many times did `epoll_wait()` return in conjunction with receiving the
     bytes sent by the client?  Do not include the event triggered by the
     incoming client connection, before data was sent.
-
+1.
  6. What does it mean when `read()` or `recv()` returns a value greater than 0
     on a blocking or nonblocking socket?
-
+  That it read more than one byte
  7. What does it mean when `read()` or `recv()` returns 0 on a blocking or
     nonblocking socket?
+    That 0 bytes were read and that there is no more data left
 
  8. What does it mean when `read()` or `recv()` returns a value less than 0 on
     a blocking socket?
+    There are errors
 
  9. Why should `errno` be checked when `read()` or `recv()` returns a value
     less than 0 on a nonblocking socket?
+    Because a non blocking socket will return -1 when an operation would block but it's a normal error. Some other errors are recoverable as well.
 
  10. Which values of `errno` have a special meaning for nonblocking sockets when
      `read()` or `recv()` returns a value less than 0?
+
+EAGAIN or EWOULDBLOCK: No data is available, try again later. This is not an error.
+EINTR: The call was interrupted by a signal. The operation can be retried.
+ECONNRESET: The connection was reset by the peer.
+EBADF: The socket descriptor is invalid.
+EPIPE: The remote side has closed the connection.
 
 Stop the client and then the server by using `ctrl`+`c` in their respective
 panes.
@@ -311,17 +327,21 @@ pages for `epoll(7)`, the `echoservere.c` code, and the output of both
  11. How many times did `epoll_wait()` return in conjunction with receiving the
      bytes sent by the client?  Do not include the event triggered by the
      incoming client connection, before data was sent.
+     1
 
  12. How many total bytes have been read from the socket and echoed back to the
      client at this point?
+      1
 
 Type "bar" in the "client" pane where `nc` is running.  Then press "Enter".
 This sends four additional bytes to the server ("bar" plus newline).
 
  13. What happened to the bytes from "foo" that had been _received_ by the
      kernel but not yet _read_ from the socket?
+      they are still in the kernal's receive buffer
 
  14. Why did `epoll_wait()` not return even though there was data to be read?
+      Since edge-triggered epoll only triggers on new data arrival, if you do not call recv() to read all of the available data, it will remain in the socket's receive buffer. However, epoll_wait() will not fire again unless new data arrives.
 
 Stop the client and then the server by using `ctrl`+`c` in their respective
 panes.
