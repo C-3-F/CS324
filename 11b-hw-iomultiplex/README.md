@@ -244,7 +244,8 @@ both `echoservere` and `nc` to help you answer.
  5. How many times did `epoll_wait()` return in conjunction with receiving the
     bytes sent by the client?  Do not include the event triggered by the
     incoming client connection, before data was sent.
-1.
+    once
+
  6. What does it mean when `read()` or `recv()` returns a value greater than 0
     on a blocking or nonblocking socket?
   That it read more than one byte
