@@ -8,7 +8,7 @@
   gcc -o mandelbrot -O4 mandelbrot.c
 
   Usage:
- 
+
   ./mandelbrot <xmin> <xmax> <ymin> <ymax> <maxiter> <xres> <out.ppm>
 
   Example:
@@ -35,11 +35,13 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdint.h>
+#include <omp.h>
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   /* Parse the command line arguments. */
-  if (argc != 8) {
+  if (argc != 8)
+  {
     printf("Usage:   %s <xmin> <xmax> <ymin> <ymax> <maxiter> <xres> <out.ppm>\n", argv[0]);
     printf("Example: %s 0.27085 0.27100 0.004640 0.004810 1000 1024 pic.ppm\n", argv[0]);
     exit(EXIT_FAILURE);
@@ -56,14 +58,14 @@ int main(int argc, char* argv[])
 
   /* Image size, width is given, height is computed. */
   const int xres = atoi(argv[6]);
-  const int yres = (xres*(ymax-ymin))/(xmax-xmin);
+  const int yres = (xres * (ymax - ymin)) / (xmax - xmin);
 
   /* The output file name */
-  const char* filename = argv[7];
+  const char *filename = argv[7];
 
   /* Open the file and write the header. */
-  FILE * fp = fopen(filename,"wb");
-  char *comment="# Mandelbrot set";/* comment should start with # */
+  FILE *fp = fopen(filename, "wb");
+  char *comment = "# Mandelbrot set"; /* comment should start with # */
 
   /*write ASCII header to the file*/
   fprintf(fp,
@@ -71,42 +73,56 @@ int main(int argc, char* argv[])
           xmin, xmax, ymin, ymax, maxiter, xres, yres, (maxiter < 256 ? 256 : maxiter));
 
   /* Precompute pixel width and height. */
-  double dx=(xmax-xmin)/xres;
-  double dy=(ymax-ymin)/yres;
+  double dx = (xmax - xmin) / xres;
+  double dy = (ymax - ymin) / yres;
 
   double x, y; /* Coordinates of the current point in the complex plane. */
-  int i,j; /* Pixel counters */
-  int k; /* Iteration counter */
-  int *saved = malloc(sizeof(int)*yres*xres);
+  int i, j;    /* Pixel counters */
+  int k;       /* Iteration counter */
+  int *saved = malloc(sizeof(int) * yres * xres);
 
-  for (j = 0; j < yres; j++) {
+  int start = omp_get_wtime();
+  for (j = 0; j < yres; j++)
+  #pragma omp parallel shared(dx,dy,j) private(i,k,x,y)
+  {
     y = ymax - j * dy;
-    for(i = 0; i < xres; i++) {
+      #pragma omp for schedule(dynamic) nowait
+    for (i = 0; i < xres; i++)
+    {
       double u = 0.0, v = 0.0; /* Coordinates of the iterated point. */
       double u2 = u * u;
       double v2 = v * v;
       x = xmin + i * dx;
       /* iterate the point */
-      for (k = 1; k < maxiter && (u2 + v2 < 4.0); k++) {
-            v = 2 * u * v + y;
-            u = u2 - v2 + x;
-            u2 = u * u;
-            v2 = v * v;
+      for (k = 1; k < maxiter && (u2 + v2 < 4.0); k++)
+      {
+        v = 2 * u * v + y;
+        u = u2 - v2 + x;
+        u2 = u * u;
+        v2 = v * v;
       };
       saved[xres * j + i] = k;
     }
   }
+  int end = omp_get_wtime();
+  printf("Time: %d\n", end - start);
 
-  for (j = 0; j < yres; j++) {
-    for(i = 0; i < xres; i++) {
+  for (j = 0; j < yres; j++)
+
+  {
+
+    for (i = 0; i < xres; i++)
+    {
       /* compute  pixel color and write it to file */
       k = saved[xres * j + i];
-      if (k >= maxiter) {
+      if (k >= maxiter)
+      {
         /* interior */
         const unsigned char black[] = {0, 0, 0, 0, 0, 0};
-        fwrite (black, 6, 1, fp);
+        fwrite(black, 6, 1, fp);
       }
-      else {
+      else
+      {
         /* exterior */
         unsigned char color[6];
         color[0] = k >> 8;

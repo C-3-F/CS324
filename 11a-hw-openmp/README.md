@@ -68,6 +68,7 @@ sha1sum pic.ppm
 Save the value of the SHA1 sum shown in the output.  Hint: it should start with
 "04c0e2...".  You will be referring to it later, to make sure that your program
 is still behaving properly after parallelizing it.
+04c0e2cf0a9e2cbc58c4d16348ef4e3be2c46efc  pic.ppm
 
 Normalize, and convert the output to png format using `convert` (part of the
 ImageMagick suite):
@@ -157,12 +158,12 @@ The amount of time spent on the parallel part of your program should be a
 significant fraction (more than half) of the total elapsed time.
 
 Now execute your code for the following numbers of threads:
- - 1
- - 2
- - 4
- - 8
- - 16
- - 32
+ - 1 - 28
+ - 2 - 
+ - 4 -
+ - 8 - 
+ - 16 - 
+ - 32 - 
 
 While your command is running, run the `top` command in another window *on the
 same machine* to see that your program is not competing with any others for
