@@ -13,6 +13,8 @@
 
 /* Recommended max object size */
 #define MAX_OBJECT_SIZE 102400
+#define MAX_REQUEST_SIZE 1024
+#define MAX_RESPONSE_SIZE 16384
 #define MAX_EVENTS 64
 #define READ_REQUEST 1
 #define SEND_REQUEST 2
@@ -40,9 +42,10 @@ void parse_request(char *, char *, char *, char *, char *);
 void test_parser();
 void print_bytes(unsigned char *, int);
 int open_sfd(int port);
+int open_client_sfd(char *hostname, char *port);
 void handle_new_clients(int epoll_sfd, int listen_sfd);
-void initialize_req_info_struct(struct request_info *req_info)
-
+void handle_client(int epoll_sfd, struct request_info *req_info);
+void initialize_req_info_struct(struct request_info *req_info);
 
 int main(int argc, char *argv[])
 {
@@ -90,7 +93,7 @@ int main(int argc, char *argv[])
 	// Loop that calls epoll_wait and handles events
 	while (1)
 	{
-		int n = epoll_wait(efd, events, MAX_EVENTS, -1);
+		int n = epoll_wait(efd, events, MAX_EVENTS, 1000);
 
 		if (n < 0)
 		{
@@ -109,10 +112,12 @@ int main(int argc, char *argv[])
 			else
 			{
 				// TODO: Handle client requests
+				handle_client(efd, req_info);
 			}
 		}
 	}
 
+	free(listen_struct);
 	return 0;
 }
 
@@ -331,6 +336,54 @@ int open_sfd(int port)
 	return sfd;
 }
 
+int open_client_sfd(char *hostname, char *port)
+{
+	const int ADDR_FAM = AF_INET;
+	const int SOCK_TYPE = SOCK_STREAM;
+	int sfd;
+	struct sockaddr_storage remote_addr_ss;
+	struct sockaddr *remote_addr = (struct sockaddr *)&remote_addr_ss;
+
+	struct addrinfo info;
+	memset(&info, 0, sizeof(struct addrinfo));
+	info.ai_family = ADDR_FAM;
+	info.ai_socktype = SOCK_TYPE;
+
+	struct addrinfo *remote_addr_info;
+	getaddrinfo(hostname, port, &info, &remote_addr_info);
+
+	struct addrinfo *rp;
+	for (rp = remote_addr_info; rp != NULL; rp = rp->ai_next)
+	{
+		sfd = socket(rp->ai_family, rp->ai_socktype, 0);
+		if (sfd < 0)
+		{
+			continue;
+		}
+
+		memcpy(remote_addr, rp->ai_addr, sizeof(struct sockaddr_storage));
+
+		if (connect(sfd, remote_addr, sizeof(struct sockaddr_storage)) >= 0)
+		{
+			// Set socket to non-blocking
+			if (fcntl(sfd, F_SETFL, fcntl(sfd, F_GETFL, 0) | O_NONBLOCK) < 0)
+			{
+				fprintf(stderr, "error setting socket option\n");
+				exit(1);
+			}
+			break;
+		}
+		close(sfd);
+	}
+	if (rp == NULL)
+	{
+		perror("Could not connect");
+		exit(EXIT_FAILURE);
+	}
+
+	return sfd;
+}
+
 void handle_new_clients(int epoll_sfd, int listen_sfd)
 {
 	while (1)
@@ -341,6 +394,7 @@ void handle_new_clients(int epoll_sfd, int listen_sfd)
 		{
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
 			{
+
 				break;
 			}
 			else
@@ -374,6 +428,240 @@ void handle_new_clients(int epoll_sfd, int listen_sfd)
 		}
 		printf("New client connected\n");
 		printf("File Descriptor: %d\n", client_proxy_sock);
+	}
+}
+
+void handle_client(int epoll_sfd, struct request_info *req_info)
+{
+	int client_proxy_sock = req_info->client_proxy_sock;
+	int state = req_info->state;
+
+	printf("Handling client descriptor %d\n", client_proxy_sock);
+	printf("State: %d\n", state);
+
+	if (state == READ_REQUEST)
+	{
+		while (1)
+		{
+			int bytes_read = recv(client_proxy_sock, req_info->read_buf + req_info->client_bytes_read, MAX_REQUEST_SIZE, 0);
+			if (bytes_read < 0)
+			{
+				if (errno == EAGAIN || errno == EWOULDBLOCK)
+				{
+					break;
+				}
+				else
+				{
+					perror("Error reading from client");
+					close(req_info->client_proxy_sock);
+					free(req_info);
+					exit(EXIT_FAILURE);
+				}
+			}
+			else
+			{
+				req_info->client_bytes_read += bytes_read;
+				if (complete_request_received(req_info->read_buf))
+				{
+					print_bytes((unsigned char *)req_info->read_buf, req_info->client_bytes_read);
+
+					// Add null terminator to request
+					req_info->read_buf[req_info->client_bytes_read] = '\0';
+
+					// Parse client request to forward to server
+					char method[16], hostname[64], port[8], path[64];
+					parse_request(req_info->read_buf, method, hostname, port, path);
+
+					printf("parsed request\n");
+					printf("METHOD: %s\n", method);
+					printf("HOSTNAME: %s\n", hostname);
+					printf("PORT: %s\n", port);
+					printf("PATH: %s\n", path);
+					// Create new request
+
+					char *new_request = req_info->write_buf;
+					int offset = 0;
+
+					offset += sprintf(new_request, "%s %s HTTP/1.0\r\n", method, path);
+					if (strcmp(port, "80") == 0)
+					{
+						offset += sprintf(new_request + offset, "Host: %s\r\n", hostname);
+					}
+					else
+					{
+						offset += sprintf(new_request + offset, "Host: %s:%s\r\n", hostname, port);
+					}
+					offset += sprintf(new_request + offset, "%s\r\n", user_agent_hdr);
+					offset += sprintf(new_request + offset, "Connection: close\r\n");
+					offset += sprintf(new_request + offset, "Proxy-Connection: close\r\n");
+					offset += sprintf(new_request + offset, "\r\n");
+
+					print_bytes((unsigned char *)new_request, offset);
+
+					req_info->bytes_to_write_to_server = strlen(new_request);
+
+					// Create socket to server
+					int proxy_server_sock = open_client_sfd(hostname, port);
+					req_info->proxy_server_sock = proxy_server_sock;
+
+					// Deregister client from epoll
+					if (epoll_ctl(epoll_sfd, EPOLL_CTL_DEL, client_proxy_sock, NULL) < 0)
+					{
+						perror("Error deregistering client from epoll");
+						exit(EXIT_FAILURE);
+					}
+
+					// Register server with epoll
+					struct epoll_event event;
+					event.data.ptr = req_info;
+					event.events = EPOLLOUT | EPOLLET;
+					if (epoll_ctl(epoll_sfd, EPOLL_CTL_ADD, proxy_server_sock, &event) < 0)
+					{
+						perror("Error registering server with epoll");
+						exit(EXIT_FAILURE);
+					}
+
+					// Set state to SEND_REQUEST
+					req_info->state = SEND_REQUEST;
+					break;
+				}
+			}
+		}
+
+		return;
+	}
+	else if (state == SEND_REQUEST)
+	{
+		while (1)
+		{
+			int len = req_info->bytes_to_write_to_server;
+			int bytes_sent = send(req_info->proxy_server_sock, req_info->write_buf + req_info->server_bytes_wrote, len, 0);
+			if (bytes_sent < 0)
+			{
+				if (errno == EAGAIN || errno == EWOULDBLOCK)
+				{
+					break;
+				}
+				else
+				{
+					perror("Error sending request to server");
+					close(req_info->proxy_server_sock);
+					close(req_info->client_proxy_sock);
+					free(req_info);
+					exit(EXIT_FAILURE);
+				}
+			}
+			else
+			{
+				req_info->server_bytes_wrote += bytes_sent;
+				if (req_info->server_bytes_wrote == req_info->bytes_to_write_to_server)
+				{
+
+					// Deregister server from epoll
+					if (epoll_ctl(epoll_sfd, EPOLL_CTL_DEL, req_info->proxy_server_sock, NULL) < 0)
+					{
+						perror("Error deregistering server from epoll");
+						exit(EXIT_FAILURE);
+					}
+
+					// Register client with epoll
+					struct epoll_event event;
+					event.data.ptr = req_info;
+					event.events = EPOLLIN | EPOLLET;
+					if (epoll_ctl(epoll_sfd, EPOLL_CTL_ADD, req_info->proxy_server_sock, &event) < 0)
+					{
+						perror("Error registering client with epoll");
+						exit(EXIT_FAILURE);
+					}
+
+					// Set state to READ_RESPONSE
+					req_info->state = READ_RESPONSE;
+					break;
+				}
+			}
+		}
+	}
+	else if (state == READ_RESPONSE)
+	{
+		while (1)
+		{
+			int bytes_read = recv(req_info->proxy_server_sock, req_info->write_buf + req_info->server_bytes_read, MAX_RESPONSE_SIZE, 0);
+			if (bytes_read < 0)
+			{
+				if (errno == EAGAIN || errno == EWOULDBLOCK)
+				{
+					break;
+				}
+				else
+				{
+					perror("Error reading from server");
+					close(req_info->proxy_server_sock);
+					close(req_info->client_proxy_sock);
+					free(req_info);
+					exit(EXIT_FAILURE);
+				}
+			}
+			else if (bytes_read == 0)
+			{ // Connection closed
+				printf("Connection closed. Printing response:\n");
+				close(req_info->proxy_server_sock);
+
+				// Null terminate the response
+				req_info->write_buf[req_info->server_bytes_read] = '\0';
+
+				print_bytes((unsigned char *)req_info->write_buf, req_info->server_bytes_read);
+
+				// Register client proxy to write
+				struct epoll_event event;
+				event.data.ptr = req_info;
+				event.events = EPOLLOUT | EPOLLET;
+
+				if (epoll_ctl(epoll_sfd, EPOLL_CTL_ADD, req_info->client_proxy_sock, &event) < 0)
+				{
+					perror("Error registering client with epoll");
+					exit(EXIT_FAILURE);
+				}
+
+				// Set state to SEND_RESPONSE
+				req_info->state = SEND_RESPONSE;
+				break;
+			}
+			else
+			{
+				req_info->server_bytes_read += bytes_read;
+			}
+		}
+	}
+	else if (state == SEND_RESPONSE)
+	{
+		while (1)
+		{
+			int bytes_sent = send(req_info->client_proxy_sock, req_info->write_buf + req_info->bytes_wrote_to_client, req_info->server_bytes_read - req_info->bytes_wrote_to_client, 0);
+			if (bytes_sent < 0)
+			{
+				if (errno == EAGAIN || errno == EWOULDBLOCK)
+				{
+					break;
+				}
+				else
+				{
+					perror("Error sending response to client");
+					close(req_info->client_proxy_sock);
+					free(req_info);
+					exit(EXIT_FAILURE);
+				}
+			}
+			else
+			{
+				req_info->bytes_wrote_to_client += bytes_sent;
+				if (req_info->bytes_wrote_to_client == req_info->server_bytes_read)
+				{
+					close(req_info->client_proxy_sock);
+					free(req_info);
+					break;
+				}
+			}
+		}
 	}
 }
 
